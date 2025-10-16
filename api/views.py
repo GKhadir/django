@@ -2,14 +2,16 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import user
+from .models import User
 from .serializers import RegisterSerializer,LoginSerializer
 from rest_framework_simplejwt.tokens import RefreshToken,TokenError
 from django.contrib.auth.hashers import make_password,check_password   
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,AllowAny
+from .permission import IsAdminUser
 
 
 class RegisterView(APIView):
+    permission_classes = [AllowAny]
     def post(self,request):
         request.data['password']=make_password(request.data['password'])
         serializer=RegisterSerializer(data=request.data)
@@ -19,15 +21,18 @@ class RegisterView(APIView):
         return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
     
 class alluser(APIView):
+    permission_classes = [IsAdminUser]
     def get(self,request):
-        users=user.objects.all()
+        users=User.objects.all()
         serializer=RegisterSerializer(users,many=True)
         return Response(serializer.data,status=status.HTTP_200_OK)
 
 class LoginView(APIView):
+    permission_classes = [AllowAny]
     def post(self, request):
         try:
-            log = user.objects.get(email=request.data['email'])
+            log = User.objects.get(email=request.data['email'])
+            print(log.password)
             if check_password(request.data['password'], log.password):
                 serializer = RegisterSerializer(log)
                 
@@ -43,10 +48,11 @@ class LoginView(APIView):
                 }, status=status.HTTP_200_OK)
             else:
                 return Response({"message": "Invalid Password"}, status=status.HTTP_400_BAD_REQUEST)
-        except user.DoesNotExist:
+        except User.DoesNotExist:
             return Response({"message": "User Not Found"}, status=status.HTTP_404_NOT_FOUND)
 
 class RefreshTokenView(APIView):
+    permission_classes = [AllowAny]
     def post(self, request):
         refresh_token = request.data.get('refresh')
 
@@ -64,3 +70,15 @@ class RefreshTokenView(APIView):
 
         except TokenError as e:
             return Response({"error": "Invalid or expired refresh token"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+class AdminView(APIView):
+    permission_classes = [AllowAny]
+    def post(self,request):
+        request.data['role']="admin"
+        request.data['password']=make_password(request.data['password'])
+        serializer=RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message":"Admin Registered Successfully"},status=status.HTTP_201_CREATED)
+        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+    
