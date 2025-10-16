@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated,AllowAny
 from .permission import IsAdminUser
 
 
-class RegisterView(APIView):
+class userRegisterView(APIView):
     permission_classes = [AllowAny]
     def post(self,request):
         request.data['password']=make_password(request.data['password'])
@@ -19,13 +19,18 @@ class RegisterView(APIView):
             serializer.save()
             return Response({"message":"User Registered Successfully"},status=status.HTTP_201_CREATED)
         return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+        
+class adminRegisterView(APIView):
+    permission_classes = [AllowAny]
+    def post(self,request):
+        request.data['role']="admin"
+        request.data['password']=make_password(request.data['password'])
+        serializer=RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message":"Admin Registered Successfully"},status=status.HTTP_201_CREATED)
+        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
     
-class alluser(APIView):
-    permission_classes = [IsAdminUser]
-    def get(self,request):
-        users=User.objects.all()
-        serializer=RegisterSerializer(users,many=True)
-        return Response(serializer.data,status=status.HTTP_200_OK)
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
@@ -70,15 +75,55 @@ class RefreshTokenView(APIView):
 
         except TokenError as e:
             return Response({"error": "Invalid or expired refresh token"}, status=status.HTTP_401_UNAUTHORIZED)
-        
-class AdminView(APIView):
-    permission_classes = [AllowAny]
-    def post(self,request):
-        request.data['role']="admin"
-        request.data['password']=make_password(request.data['password'])
-        serializer=RegisterSerializer(data=request.data)
+    
+class alluser(APIView):
+    permission_classes = [IsAdminUser]
+    def get(self,request):
+        users=User.objects.all()
+        serializer=RegisterSerializer(users,many=True)
+        return Response(serializer.data,status=status.HTTP_200_OK)
+    
+class profileView(APIView):
+    def get(self,request):
+        user=request.user
+        serializer=RegisterSerializer(user)
+        return Response(serializer.data,status=status.HTTP_200_OK)
+    
+    def put(self,request):
+        user=request.user
+        if 'password' in request.data:
+            request.data['password']=make_password(request.data['password'])
+        serializer=RegisterSerializer(user,data=request.data,partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response({"message":"Admin Registered Successfully"},status=status.HTTP_201_CREATED)
+            return Response(serializer.data,status=status.HTTP_200_OK)
         return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
-    
+
+class allCrudView(APIView):
+    permission_classes = [IsAdminUser]
+    def get(self,request,id):
+        try:
+            user=User.objects.get(id=id)
+            serializer=RegisterSerializer(user)
+            return Response(serializer.data,status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"message":"User Not Found"},status=status.HTTP_404_NOT_FOUND)
+    def put(self,request,email):
+        try:
+            user=User.objects.get(email=email)
+            if 'password' in request.data:
+                request.data['password']=make_password(request.data['password'])
+            serializer=RegisterSerializer(user,data=request.data,partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data,status=status.HTTP_200_OK)
+            return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+        except User.DoesNotExist:
+            return Response({"message":"User Not Found"},status=status.HTTP_404_NOT_FOUND)
+    def delete(self,request,email):
+        try:
+            user=User.objects.get(email=email)
+            user.delete()
+            return Response({"message":"User Deleted Successfully"},status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"message":"User Not Found"},status=status.HTTP_404_NOT_FOUND)
